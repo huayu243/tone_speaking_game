@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>聲調小偵探：句子口說版</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; font-family:"PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif; }
+  body { background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); min-height:100vh; display:flex; justify-content:center; align-items:center; padding:16px; }
+  .card { background:#fff; border-radius:24px; padding:32px 28px; max-width:560px; width:100%; box-shadow:0 20px 60px rgba(0,0,0,.3); text-align:center; }
+  h1 { color:#4a3b8f; font-size:26px; margin-bottom:8px; }
+  h2 { color:#4a3b8f; font-size:21px; margin-bottom:10px; }
+  p.sub { color:#888; font-size:15px; margin-bottom:18px; line-height:1.6; }
+  .btn { display:block; width:100%; padding:15px; margin:11px 0; font-size:18px; font-weight:bold; border:none; border-radius:16px; cursor:pointer; transition:transform .1s, box-shadow .1s; }
+  .btn:active { transform:scale(.97); }
+  .btn-primary { background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; box-shadow:0 6px 16px rgba(102,126,234,.4); }
+  .btn-gray { background:#e0e0e0; color:#777; }
+  .btn-speaker { background:#fff3cd; color:#8a6d00; font-size:20px; border:3px solid #ffd54f; }
+  .btn-mic { background:#ffe0e6; color:#c2185b; font-size:20px; border:3px solid #f48fb1; }
+  .btn:disabled { opacity:.5; cursor:not-allowed; }
+  .progress { background:#eee; border-radius:99px; height:14px; margin:12px 0 6px; overflow:hidden; }
+  .progress > div { background:linear-gradient(90deg,#667eea,#38ef7d); height:100%; border-radius:99px; transition:width .3s; }
+  .progress-text { color:#999; font-size:14px; margin-bottom:8px; }
+  .score-text { color:#4a3b8f; font-weight:bold; font-size:16px; margin-bottom:8px; }
+  .feedback { min-height:50px; font-size:17px; font-weight:bold; margin:10px 0; border-radius:12px; padding:12px; display:flex; align-items:center; justify-content:center; line-height:1.5; }
+  .feedback.good { background:#e8f9e8; color:#2e7d32; }
+  .feedback.bad { background:#fdeaea; color:#c62828; }
+  .feedback.info { background:#e8f0fe; color:#3949ab; }
+  .sentence-display { font-size:30px; font-weight:bold; color:#333; margin:12px 0 6px; line-height:1.5; }
+  .pinyin-display { font-size:19px; color:#667eea; margin-bottom:4px; line-height:1.5; }
+  .english-display { font-size:16px; color:#999; margin-bottom:8px; font-style:italic; line-height:1.5; }
+  .heard { background:#f5f5f5; border-radius:12px; padding:10px; margin:10px 0; color:#555; font-size:15px; min-height:42px; line-height:1.5; }
+  .stars { font-size:42px; letter-spacing:6px; margin:10px 0; }
+  .tip { font-size:13px; color:#aaa; margin-top:12px; line-height:1.7; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<div class="card">
+
+  <!-- 首頁 -->
+  <div id="screen-home">
+    <div style="font-size:54px;">🎤🕵️</div>
+    <h1>聲調小偵探・句子口說版</h1>
+    <p class="sub">練習第一聲 ˉ vs 第四聲 ˋ<br>大聲念出句子，讓電腦聽懂你！</p>
+    <button class="btn btn-primary" onclick="requestMicThen(startGame)">▶️ 開始句子挑戰<br><small style="font-weight:normal">10 句生活會話（依序練習）</small></button>
+    <p class="tip">建議使用 Chrome 或 Edge 瀏覽器<br>第一次使用時請允許麥克風權限，之後就能直接說話</p>
+  </div>
+
+  <!-- 遊戲 -->
+  <div id="screen-game" class="hidden">
+    <h2>🎤 句子口說挑戰</h2>
+    <div class="progress"><div id="game-bar" style="width:0%"></div></div>
+    <div class="progress-text" id="game-progress-text"></div>
+    <div class="score-text" id="game-score"></div>
+    <div class="sentence-display" id="game-word"></div>
+    <div class="pinyin-display" id="game-pinyin"></div>
+    <div class="english-display" id="game-en"></div>
+    <button class="btn btn-speaker" onclick="speak(queue[index].w, 0.7)">🔊 聽示範</button>
+    <button class="btn btn-mic" id="btn-mic" onclick="startMic()">🎤 按下說話</button>
+    <div class="heard" id="heard">電腦聽到的會顯示在這裡…</div>
+    <div class="feedback" id="game-feedback"></div>
+    <button class="btn btn-primary hidden" id="game-next" onclick="nextQuestion()">下一題 ➜</button>
+    <button class="btn btn-gray" onclick="goHome()">🏠 回主頁</button>
+  </div>
+
+  <!-- 結果 -->
+  <div id="screen-result" class="hidden">
+    <h2>🎤 口說結果</h2>
+    <div class="stars" id="game-stars"></div>
+    <p class="sub" id="result-text"></p>
+    <button class="btn btn-primary" onclick="requestMicThen(startGame)">🔄 再挑戰一次</button>
+    <button class="btn btn-gray" onclick="goHome()">🏠 回主頁</button>
+  </div>
+
+</div>
+
+<script>
+// ================= 題庫：句子 =================
+const SENTENCES = [
+  { w:"今天天氣不錯", p:"jīn tiān tiān qì bù cuò", en:"The weather is nice today." },
+  { w:"我要喝咖啡", p:"wǒ yào hē kā fēi", en:"I want to drink coffee." },
+  { w:"我不吃香蕉", p:"wǒ bù chī xiāng jiāo", en:"I don't eat bananas." },
+  { w:"冰箱裡有冰塊", p:"bīng xiāng lǐ yǒu bīng kuài", en:"There are ice cubes in the refrigerator." },
+  { w:"手機要充電", p:"shǒu jī yào chōng diàn", en:"The phone needs to be charged." },
+  { w:"我要吃豬肉和青菜", p:"wǒ yào chī zhū ròu hé qīng cài", en:"I want to eat pork and green vegetables." },
+  { w:"媽媽每天看電視", p:"mā ma měi tiān kàn diàn shì", en:"Mom watches TV every day." },
+  { w:"他今天開車去上班", p:"tā jīn tiān kāi chē qù shàng bān", en:"He drove to work today." },
+  { w:"請幫我開教室的電燈", p:"qǐng bāng wǒ kāi jiào shì de diàn dēng", en:"Please turn on the classroom light for me." },
+  { w:"他今天生病了，要去看醫生", p:"tā jīn tiān shēng bìng le, yào qù kàn yī shēng", en:"He got sick today and needs to see a doctor." },
+];
+
+// ================= TTS =================
+let zhVoice = null;
+function loadVoice(){
+  const voices = speechSynthesis.getVoices();
+  zhVoice = voices.find(v => v.lang === 'zh-TW') || voices.find(v => v.lang && v.lang.startsWith('zh')) || null;
+}
+if ('speechSynthesis' in window){ loadVoice(); speechSynthesis.onvoiceschanged = loadVoice; }
+function speak(text, rate){
+  if (!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  if (zhVoice) u.voice = zhVoice;
+  u.lang = 'zh-TW';
+  u.rate = rate || 0.8;
+  speechSynthesis.speak(u);
+}
+function shuffle(arr){
+  const a = arr.slice();
+  for (let i=a.length-1; i>0; i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
+
+// ================= 麥克風權限（預先允許） =================
+let micReady = false;
+function requestMicThen(cb){
+  if (micReady || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ cb(); return; }
+  navigator.mediaDevices.getUserMedia({ audio:true })
+    .then(function(stream){ micReady = true; stream.getTracks().forEach(function(t){t.stop()}); cb(); })
+    .catch(function(){ cb(); });
+}
+
+// ================= 遊戲邏輯 =================
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let queue = [], index = 0, score = 0, micBusy = false;
+
+function startGame(){
+  queue = SENTENCES.slice(); // 依照題庫順序出題，不隨機
+  index = 0; score = 0;
+  showScreen("game");
+  updateUI();
+}
+function showScreen(name){
+  ["home","game","result"].forEach(s => document.getElementById("screen-"+s).classList.add("hidden"));
+  document.getElementById("screen-"+name).classList.remove("hidden");
+}
+function goHome(){ showScreen("home"); }
+function updateUI(){
+  const cur = queue[index];
+  document.getElementById("game-bar").style.width = (index/queue.length*100)+"%";
+  document.getElementById("game-progress-text").textContent = "第 "+(index+1)+" / "+queue.length+" 題";
+  document.getElementById("game-score").textContent = "⭐ 得分："+score;
+  document.getElementById("game-word").textContent = cur.w;
+  document.getElementById("game-pinyin").textContent = cur.p;
+  document.getElementById("game-en").textContent = "= " + cur.en;
+  document.getElementById("heard").textContent = "電腦聽到的會顯示在這裡…";
+  const fb = document.getElementById("game-feedback");
+  fb.className = "feedback"; fb.textContent = "";
+  document.getElementById("game-next").classList.add("hidden");
+  document.getElementById("btn-mic").disabled = false;
+}
+
+// 比對：目標句子的字有 70% 出現在辨識結果中就算通過（容忍標點、他/她、語助詞差異）
+function matchScore(target, heard){
+  const clean = s => s.replace(/[\s，。！？、,.!?「」]/g,"");
+  const t = clean(target), h = clean(heard);
+  if (h.includes(t)) return 1;
+  if (t.includes(h) && h.length >= Math.ceil(t.length * 0.5)) return h.length / t.length;
+  let hit = 0;
+  for (const ch of new Set(t.split(""))){ if (h.includes(ch)) hit++; }
+  return hit / new Set(t.split("")).size;
+}
+
+function startMic(){
+  if (micBusy) return;
+  if (!SR){ alert("這個瀏覽器不支援語音辨識，請改用電腦版的 Chrome 或 Edge。"); return; }
+  const cur = queue[index];
+  micBusy = true;
+  const btn = document.getElementById("btn-mic");
+  btn.disabled = true; btn.textContent = "👂 聽你說話中…";
+  const rec = new SR();
+  rec.lang = 'zh-TW';
+  rec.interimResults = false;
+  rec.maxAlternatives = 3;
+  rec.onresult = function(e){
+    const alts = Array.from(e.results[0]).map(function(a){ return a.transcript; });
+    document.getElementById("heard").textContent = "電腦聽到：「"+alts[0]+"」";
+    const fb = document.getElementById("game-feedback");
+    const best = Math.max.apply(null, alts.map(function(t){ return matchScore(cur.w, t); }));
+    if (best >= 0.7){
+      score++;
+      fb.className = "feedback good";
+      fb.textContent = "🎉 太棒了！電腦聽懂了你的句子！";
+      speak("太棒了！", 1);
+    } else {
+      fb.className = "feedback bad";
+      fb.innerHTML = "💪 再試一次！對照拼音 "+cur.p+" 慢慢念清楚<br>注意第一聲要平、第四聲要降";
+      speak(cur.w, 0.7);
+      btn.disabled = false;
+    }
+    document.getElementById("game-score").textContent = "⭐ 得分："+score;
+    document.getElementById("game-next").classList.remove("hidden");
+  };
+  rec.onerror = function(e){
+    const fb = document.getElementById("game-feedback");
+    fb.className = "feedback info";
+    fb.textContent = "⚠️ 麥克風問題（"+(e.error||"未知")+"），請確認已允許麥克風權限。";
+    btn.disabled = false;
+  };
+  rec.onend = function(){ micBusy = false; btn.textContent = "🎤 按下說話"; };
+  try { rec.start(); } catch(err){ micBusy = false; btn.disabled = false; }
+}
+function nextQuestion(){
+  index++;
+  if (index >= queue.length){ endGame(); return; }
+  updateUI();
+}
+function endGame(){
+  const total = queue.length, pct = score/total;
+  document.getElementById("game-stars").textContent = "⭐".repeat(Math.round(pct*5)) + "☆".repeat(5-Math.round(pct*5));
+  document.getElementById("result-text").textContent = "電腦聽懂了 "+score+" / "+total+" 句（"+Math.round(pct*100)+"%）";
+  speak("口說挑戰完成！", 1);
+  showScreen("result");
+}
+</script>
+</body>
+</html>
